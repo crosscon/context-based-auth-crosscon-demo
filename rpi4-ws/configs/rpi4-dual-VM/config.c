@@ -2,6 +2,7 @@
 
 // Linux Image
 VM_IMAGE(linux_image, "../lloader/linux-rpi4.bin");
+VM_IMAGE(linux_image2, "../lloader/linux2-rpi4.bin");
 
 // Linux VM configuration with ethernet
 struct vm_config linux = {
@@ -94,8 +95,8 @@ struct vm_config linux = {
 struct vm_config linux2 = {
     .image = {
         .base_addr = 0x20200000,
-        .load_addr = VM_IMAGE_OFFSET(linux_image),
-        .size = VM_IMAGE_SIZE(linux_image),
+        .load_addr = VM_IMAGE_OFFSET(linux_image2),
+        .size = VM_IMAGE_SIZE(linux_image2),
     },
     .entry = 0x20200000,
 
