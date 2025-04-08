@@ -174,7 +174,7 @@ struct config config = {
     .shmemlist = (struct shmem[]) {
         [0] = { .size = 0x00200000, },
     },
-    .vmlist_size = 1,
+    .vmlist_size = 2,
     .vmlist = {
         &linux,
         &linux2,
