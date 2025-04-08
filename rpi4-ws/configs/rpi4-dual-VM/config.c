@@ -153,11 +153,11 @@ struct vm_config linux2 = {
             //         213, 214, 215, 216,
             //     }
             // },
-            {
-                /* Arch timer interrupt */
-                .interrupt_num = 1,
-                .interrupts = (irqid_t[]) {27}
-            }
+            // {
+            //     /* Arch timer interrupt */
+            //     .interrupt_num = 1,
+            //     .interrupts = (irqid_t[]) {27}
+            // }
         },
         .arch = {
             .gic = {
