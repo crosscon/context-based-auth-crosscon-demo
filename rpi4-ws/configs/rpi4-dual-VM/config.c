@@ -107,7 +107,7 @@ struct vm_config linux2 = {
         .region_num = 1,
         .regions =  (struct mem_region[]) {
             {
-                .base = 0x20000000,
+                .base = 0x60000000,
                 .size = 0x40000000,
             }
         },
