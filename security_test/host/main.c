@@ -30,6 +30,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stdatomic.h>
 
 /* OP-TEE TEE client API (built by optee_client) */
 #include <tee_client_api.h>
@@ -38,104 +39,294 @@
 #include <security_test_ta.h>
 
 #define LLC_SIZE 1024*1024
+#define SHM_SIZE 1024*512
+#define TEST_REPEAT 1000
+
 #define SEC_TO_NS(sec) ((sec)*1000000000)
+
+typedef struct {
+	TEEC_Context ctx;
+	TEEC_Session sess;
+	TEEC_SharedMemory shm;
+	TEEC_Operation op;
+} Tee_Data;
+
+uint64_t dummy_value;
 
 void flush_cache() {
 	static const int allocate_amount = LLC_SIZE * 10;
 	int* data = malloc(allocate_amount * sizeof(int));
-	for (int i = 0; i < allocate_amount; ++i) {
+	for (int i = 0; i < allocate_amount; ++i)
 		data[i] = i;
-	}
+	free(data);
 }
 
-uint64_t nanosec() {
-	struct timespec ts;
-	if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
-		return -1;
-	}
+uint64_t nanosec(struct timespec ts) {
 	return SEC_TO_NS((uint64_t)ts.tv_sec) + (uint64_t)ts.tv_nsec;
 }
 
-int main(void)
-{
+/**
+ * Returns ts2 - ts2 in nanoseconds
+ */
+uint64_t nano_diff(struct timespec ts1, struct timespec ts2) {
+	uint64_t time1 = nanosec(ts1);
+	uint64_t time2 = nanosec(ts2);
+	// probably needs better way to deal with case where variable wraps around
+	return time2 > time1 ? time2 - time1 : 0;
+}
+
+void prepare(Tee_Data *tee) {
 	TEEC_Result res;
-	TEEC_Context ctx;
-	TEEC_Session sess;
-	TEEC_Operation op;
 	TEEC_UUID uuid = TA_SECURITY_TEST_UUID;
 	uint32_t err_origin;
-	uint64_t t1, t2;
 
 	/* Initialize a context connecting us to the TEE */
-	res = TEEC_InitializeContext(NULL, &ctx);
+	res = TEEC_InitializeContext(NULL, &tee->ctx);
 	if (res != TEEC_SUCCESS)
 		errx(1, "TEEC_InitializeContext failed with code 0x%x", res);
 
-	/* Allocate 10 MB of shared memory */
-	TEEC_SharedMemory shm = { };
-	shm.size = 1024*512;
-	shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-	printf("Allocating %lu bytes of shared memory\n", shm.size);
-	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%lu\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
-	res = TEEC_AllocateSharedMemory(&ctx, &shm);
+	/* Allocate shared memory */
+	printf("Allocating %lu bytes of shared memory\n", tee->shm.size);
+	tee->shm.size = SHM_SIZE;
+	tee->shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+	res = TEEC_AllocateSharedMemory(&tee->ctx, &tee->shm);
 	if (res != TEEC_SUCCESS)
 		errx(1, "TEEC_AllocateSharedMemory failed with code 0x%x", res);
 	/*
 	 * Open a session to the "security test" TA
 	 */
-	res = TEEC_OpenSession(&ctx, &sess, &uuid,
+	res = TEEC_OpenSession(&tee->ctx, &tee->sess, &uuid,
 			       TEEC_LOGIN_PUBLIC, NULL, NULL, &err_origin);
 	if (res != TEEC_SUCCESS)
 		errx(1, "TEEC_Opensession failed with code 0x%x origin 0x%x",
 			res, err_origin);
 
-	/*
-	 * Execute a function in the TA by invoking it, in this case
-	 * we're incrementing a number.
-	 *
-	 * The value of command ID part and how the parameters are
-	 * interpreted is part of the interface provided by the TA.
-	 */
-
 	/* Clear the TEEC_Operation struct */
-	memset(&op, 0, sizeof(op));
+	memset(&tee->op, 0, sizeof(tee->op));
 
 	/*
-	 * Prepare the argument. Pass a value in the first parameter,
-	 * the remaining three parameters are unused.
+		* Prepare the argument. Pass a value in the first parameter,
+		* the remaining three parameters are unused.
+		*/
+	tee->op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_PARTIAL_INPUT, TEEC_NONE,
+					TEEC_NONE, TEEC_NONE);
+	tee->op.params[0].memref.parent = &tee->shm;
+	tee->op.params[0].memref.size = tee->shm.size;
+}
+
+uint64_t time_access(uint8_t *addr) {
+	struct timespec ts1;
+	struct timespec ts2;
+	int8_t tmp;
+	atomic_thread_fence(memory_order_acquire);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &ts1);
+	tmp = *addr;
+	atomic_thread_fence(memory_order_release);
+	clock_gettime(CLOCK_MONOTONIC_RAW, &ts2);
+	dummy_value += tmp;
+	return nano_diff(ts1, ts2);
+}
+
+void time_cache_access(uint8_t *buffer) {
+	uint64_t cache_hit = 0, cache_miss = 0;
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		volatile uint8_t *data = buffer;
+		*data = i;
+		cache_hit += time_access(data);
+	}
+
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		flush_cache();
+		volatile uint8_t *data = buffer;
+		cache_miss += time_access(data);
+	}
+
+	printf("Average cache hit time: %lu\n", cache_hit / TEST_REPEAT);
+	printf("Average cache miss time: %lu\n", cache_miss / TEST_REPEAT);
+}
+
+/* Should be cache miss, otherwise shared buffer is accessed (probably copied) */
+void time_nop_tee_command(Tee_Data *tee) {
+	uint64_t access_time = 0;
+	uint32_t err_origin;
+	TEEC_Result res;
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		flush_cache();
+		res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_DO_NOTHING,
+					 &tee->op, &err_origin);
+		if (res != TEEC_SUCCESS)
+			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+				 res, err_origin);
+		access_time += time_access((uint8_t*)tee->shm.buffer);
+	}
+
+	printf("Average shared memory access time: %lu\n", access_time / TEST_REPEAT);
+}
+
+void flush_and_reload(Tee_Data *tee) {
+	uint64_t access_time = 0;
+	uint32_t err_origin;
+	TEEC_Result res;
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		flush_cache();
+		res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_READ_MEM,
+					 &tee->op, &err_origin);
+		if (res != TEEC_SUCCESS)
+			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+				 res, err_origin);
+		access_time += time_access((uint8_t*)tee->shm.buffer);
+	}
+
+	printf("Flush+Reload: Average memory access time: %lu\n", access_time / TEST_REPEAT);
+}
+
+void evict_and_time(Tee_Data *tee) {
+	struct timespec ts1, ts2;
+	uint64_t time_no_evict = 0, time_evict = 0;
+	uint32_t err_origin;
+	TEEC_Result res;
+	/**
+	 * Calculate how long it takes process to finish when shared memory is
+	 * in cache.
 	 */
-	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_PARTIAL_INPUT, TEEC_NONE,
-					 TEEC_NONE, TEEC_NONE);
-	op.params[0].memref.parent = &shm;
-	op.params[0].memref.size = shm.size;
+	dummy_value += *(uint64_t*)tee->shm.buffer;
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		atomic_thread_fence(memory_order_acquire);
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts1);
+		res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_READ_MEM,
+			&tee->op, &err_origin);
+		atomic_thread_fence(memory_order_release);
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts2);
+		if (res != TEEC_SUCCESS)
+			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+				 res, err_origin);
+		time_no_evict += nano_diff(ts1, ts2);
+	}
 
-	printf("Flush cache & invoke TA command\n");
-	flush_cache();
+	printf("Evict+Time: Average program time without evicting cache: %lu\n", time_no_evict / TEST_REPEAT);
 
-	/*
-	 * TA_SECURITY_TEST_CMD_READ_MEM is the actual function in the TA to be
-	 * called.
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		flush_cache();
+		atomic_thread_fence(memory_order_acquire);
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts1);
+		res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_READ_MEM,
+			&tee->op, &err_origin);
+		atomic_thread_fence(memory_order_release);
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts2);
+		if (res != TEEC_SUCCESS)
+			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+				 res, err_origin);
+		time_evict += nano_diff(ts1, ts2);
+	}
+
+	printf("Evict+Time: Average program time with evicted cache: %lu\n", time_evict / TEST_REPEAT);
+}
+
+void prime_and_probe(Tee_Data *tee) {
+	uint64_t access_time = 0;
+	uint32_t err_origin;
+	TEEC_Result res;
+	uint8_t *data_in_cache = malloc(LLC_SIZE);
+	uint64_t no_access_time_per_line[LLC_SIZE / 64] = { 0 };
+	uint64_t access_time_per_line[LLC_SIZE / 64] = { 0 };
+	uint64_t access_time;
+
+	// test which lines are evicted when TA doesn't access it's own dummy
+	// memory
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		// check each line separately as due to replacement policy we
+		// might evict our own data if we try to test whole cache in one
+		// go
+		for (size_t line = 0; line < LLC_SIZE / 64; ++line) {
+			// fill cache with our data
+			for (int i = 0; i < LLC_SIZE; ++i) {
+				dummy_value += data_in_cache[i];
+			}
+			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_DO_NOTHING,
+						&tee->op, &err_origin);
+			if (res != TEEC_SUCCESS)
+				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+					res, err_origin);
+			no_access_time_per_line[line] += time_access(data_in_cache + line * 64);
+		}
+	}
+
+	// test which lines are evicted when TA accesses it's own dummy memory
+	for (int i = 0; i < TEST_REPEAT; ++i) {
+		// check each line separately as due to replacement policy we
+		// might evict our own data if we try to test whole cache in one
+		// go
+		for (size_t line = 0; line < LLC_SIZE / 64; ++line) {
+			// fill cache with our data
+			for (int i = 0; i < LLC_SIZE; ++i) {
+				dummy_value += data_in_cache[i];
+			}
+			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_ACCESS_INTERNAL_MEMORY,
+						&tee->op, &err_origin);
+			if (res != TEEC_SUCCESS)
+				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
+					res, err_origin);
+			access_time_per_line[line] += time_access(data_in_cache + line * 64);
+		}
+	}
+
+	printf("Prime+Probe: Average line access time difference\n");
+	for (size_t line; line < LLC_SIZE / 64; ++line) {
+		printf("Line %u:\t", line);
+		if (access_time_per_line[line] > no_access_time_per_line[line]) {
+			access_time = access_time_per_line[line] - no_access_time_per_line[line];
+		} else {
+			access_time = no_access_time_per_line[line] - access_time_per_line[line];
+			printf("-");
+		}
+		printf("%lu\n", access_time);
+	}
+
+	free(data_in_cache);
+}
+
+int main(void)
+{
+	TEEC_Result res;
+	Tee_Data tee = {};
+	uint64_t t1, t2;
+
+	printf("Prepare program\n");
+	prepare(&tee);
+
+	/**
+	 * Some base statistics, how long average cache hit/miss takes and
+	 * whether passing shared memory buffer results in it being
+	 * copied/accessed.
 	 */
-	res = TEEC_InvokeCommand(&sess, TA_SECURITY_TEST_CMD_READ_MEM, &op,
-				 &err_origin);
-	if (res != TEEC_SUCCESS)
-		errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
-			res, err_origin);
+	printf("Time average time of cache hit and cache miss when accessing shared memory\n");
+	time_cache_access((uint8_t*)tee.shm.buffer);
+	printf("\nCheck whether passing shared buffer results in it being copied\n");
+	time_nop_tee_command(&tee);
 
+	/* Test cases */
+	printf("\nFlush+Reload:\n");
+	flush_and_reload(&tee);
 
-	t1 = nanosec();
-	((int*)shm.buffer)[0] = 1;
-	t2 = nanosec();
-	printf("Shared mem read time = %lu\n", t2 - t1);
+	printf("\nEvict+Time:\n");
+	evict_and_time(&tee);
+
+	printf("\nPrime+Probe:\n");
+	prime_and_probe(&tee);
+
+	/* End test cases */
 
 	/*
 	 * We're done with the TA, close the session and
 	 * destroy the context.
 	 */
+	TEEC_CloseSession(&tee.sess);
+	TEEC_ReleaseSharedMemory(&tee.shm);
+	TEEC_FinalizeContext(&tee.ctx);
 
-	TEEC_CloseSession(&sess);
-
-	TEEC_FinalizeContext(&ctx);
+	// Print dummy value to make sure compiler doesn't optimize out
+	// instructions without side effects
+	printf("Dummy value: %lu\n", dummy_value);
 
 	return 0;
 }

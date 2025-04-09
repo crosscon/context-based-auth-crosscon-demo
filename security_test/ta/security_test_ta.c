@@ -30,6 +30,8 @@
 
 #include <security_test_ta.h>
 
+int *dummy_data;
+
 /*
  * Called when the instance of the TA is created. This is the first call in
  * the TA.
@@ -74,6 +76,8 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 	(void)&params;
 	(void)&sess_ctx;
 
+	dummy_data = malloc(sizeof(int));
+
 	/* If return value != TEE_SUCCESS the session will not be created. */
 	return TEE_SUCCESS;
 }
@@ -103,6 +107,11 @@ static TEE_Result read_mem(uint32_t param_types,
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
+	printf("read_mem: shared memory at %p has value %d\n",
+		params[0].memref.buffer,
+		*(int*)params[0].memref.buffer
+	);
+
 	return TEE_SUCCESS;
 }
 
@@ -122,6 +131,11 @@ TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *sess_ctx,
 	switch (cmd_id) {
 	case TA_SECURITY_TEST_CMD_READ_MEM:
 		return read_mem(param_types, params);
+	case TA_SECURITY_TEST_CMD_ACCESS_INTERNAL_MEMORY:
+		*dummy_data=cmd_id;
+		return TEE_SUCCESS;
+	case TA_SECURITY_TEST_CMD_DO_NOTHING:
+		return TEE_SUCCESS;
 	default:
 		return TEE_ERROR_BAD_PARAMETERS;
 	}

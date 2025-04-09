@@ -37,6 +37,9 @@
 		{ 0xab, 0xe2, 0x00, 0x02, 0xa5, 0xd5, 0xc5, 0x1b} }
 
 /* The function IDs implemented in this TA */
-#define TA_SECURITY_TEST_CMD_READ_MEM		0
+#define TA_SECURITY_TEST_CMD_READ_MEM					0
+#define TA_SECURITY_TEST_CMD_DO_NOTHING					1
+#define TA_SECURITY_TEST_CMD_ACCESS_INTERNAL_MEMORY		2
+
 
 #endif /*TA_SECURITY_TEST_H*/
