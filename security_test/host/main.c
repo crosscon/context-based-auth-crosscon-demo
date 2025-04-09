@@ -75,10 +75,11 @@ int main(void)
 	TEEC_SharedMemory shm = { };
 	shm.size = 1024*1024*10;
 	shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-	printf("Allocating %ld bytes of shared memory\n", shm.size);
-	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%ld\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
-	TEEC_AllocateSharedMemory(&ctx, &shm);
-
+	printf("Allocating %lu bytes of shared memory\n", shm.size);
+	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%lu\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
+	res = TEEC_AllocateSharedMemory(&ctx, &shm);
+	if (res != TEEC_SUCCESS)
+		errx(1, "TEEC_AllocateSharedMemory failed with code 0x%x", res);
 	/*
 	 * Open a session to the "security test" TA
 	 */
@@ -125,7 +126,7 @@ int main(void)
 	t1 = nanosec();
 	((int*)shm.buffer)[0] = 1;
 	t2 = nanosec();
-	printf("Shared mem read time = %ld\n", t2 - t1);
+	printf("Shared mem read time = %lu\n", t2 - t1);
 
 	/*
 	 * We're done with the TA, close the session and
