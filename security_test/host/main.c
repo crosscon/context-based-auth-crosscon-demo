@@ -75,8 +75,8 @@ int main(void)
 	TEEC_SharedMemory shm = { };
 	shm.size = 1024*1024*10;
 	shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
-	printf("Allocating %d bytes of shared memory\n", shm.size);
-	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%d\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
+	printf("Allocating %ld bytes of shared memory\n", shm.size);
+	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%ld\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
 	TEEC_AllocateSharedMemory(&ctx, &shm);
 
 	/*
@@ -125,7 +125,7 @@ int main(void)
 	t1 = nanosec();
 	((int*)shm.buffer)[0] = 1;
 	t2 = nanosec();
-	printf("Shared mem read time = %d\n", t2 - t1);
+	printf("Shared mem read time = %ld\n", t2 - t1);
 
 	/*
 	 * We're done with the TA, close the session and
