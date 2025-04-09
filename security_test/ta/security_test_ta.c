@@ -36,7 +36,7 @@
  */
 TEE_Result TA_CreateEntryPoint(void)
 {
-	IMSG("has been called");
+	IMSG("TA_CreateEntryPoint: has been called");
 
 	return TEE_SUCCESS;
 }
@@ -47,7 +47,7 @@ TEE_Result TA_CreateEntryPoint(void)
  */
 void TA_DestroyEntryPoint(void)
 {
-	IMSG("has been called");
+	IMSG("TA_DestroyEntryPoint: has been called");
 }
 
 /*
@@ -65,7 +65,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 						   TEE_PARAM_TYPE_NONE,
 						   TEE_PARAM_TYPE_NONE);
 
-	IMSG("has been called");
+	IMSG("TA_OpenSessionEntryPoint: has been called");
 
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -85,7 +85,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 void TA_CloseSessionEntryPoint(void __maybe_unused *sess_ctx)
 {
 	(void)&sess_ctx; /* Unused parameter */
-	IMSG("has been called");
+	IMSG("TA_CloseSessionEntryPoint: has been called");
 }
 
 static TEE_Result read_mem(uint32_t param_types,
@@ -96,7 +96,8 @@ static TEE_Result read_mem(uint32_t param_types,
 						   TEE_PARAM_TYPE_NONE,
 						   TEE_PARAM_TYPE_NONE);
 
-	IMSG("has been called");
+	IMSG("read_mem: has been called");
+	IMSG("read_mem: exp_param_types: %u", exp_param_types);
 
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -114,7 +115,8 @@ TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *sess_ctx,
 			uint32_t param_types, TEE_Param params[4])
 {
 	(void)&sess_ctx; /* Unused parameter */
-	IMSG("has been called");
+	IMSG("TA_InvokeCommandEntryPoint: has been called");
+	IMSG("TA_InvokeCommandEntryPoint: cmd_id: %u", cmd_id);
 
 	switch (cmd_id) {
 	case TA_SECURITY_TEST_CMD_READ_MEM:
