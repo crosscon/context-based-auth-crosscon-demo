@@ -18,7 +18,7 @@ BINARY = security_test
 all: $(BINARY)
 
 $(BINARY): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $< $(LDADD)
+	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LDADD)
 
 .PHONY: clean
 clean:

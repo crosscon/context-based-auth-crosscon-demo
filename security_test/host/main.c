@@ -73,7 +73,7 @@ int main(void)
 
 	/* Allocate 10 MB of shared memory */
 	TEEC_SharedMemory shm = { };
-	shm.size = 1024*1024*10;
+	shm.size = 1024*512;
 	shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
 	printf("Allocating %lu bytes of shared memory\n", shm.size);
 	printf("TEEC_CONFIG_SHAREDMEM_MAX_SIZE=%lu\n", TEEC_CONFIG_SHAREDMEM_MAX_SIZE);
