@@ -98,6 +98,7 @@ static TEE_Result read_mem(uint32_t param_types,
 
 	IMSG("read_mem: has been called");
 	IMSG("read_mem: exp_param_types: %u", exp_param_types);
+	IMSG("read_mem: param_types: %u", param_types);
 
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;

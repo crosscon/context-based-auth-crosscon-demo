@@ -104,7 +104,7 @@ int main(void)
 	 * Prepare the argument. Pass a value in the first parameter,
 	 * the remaining three parameters are unused.
 	 */
-	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_TEMP_INPUT, TEEC_NONE,
+	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_PARTIAL_INPUT, TEEC_NONE,
 					 TEEC_NONE, TEEC_NONE);
 	op.params[0].memref.parent = shm.buffer;
 	op.params[0].memref.size = shm.size;
