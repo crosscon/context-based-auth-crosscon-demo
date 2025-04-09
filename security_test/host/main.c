@@ -40,7 +40,7 @@
 
 #define LLC_SIZE 1024*1024
 #define SHM_SIZE 1024*512
-#define TEST_REPEAT 1000
+#define TEST_REPEAT 50
 
 #define SEC_TO_NS(sec) ((sec)*1000000000)
 
@@ -86,9 +86,9 @@ void prepare(Tee_Data *tee) {
 		errx(1, "TEEC_InitializeContext failed with code 0x%x", res);
 
 	/* Allocate shared memory */
-	printf("Allocating %lu bytes of shared memory\n", tee->shm.size);
 	tee->shm.size = SHM_SIZE;
 	tee->shm.flags = TEEC_MEM_INPUT | TEEC_MEM_OUTPUT;
+	printf("Allocating %lu bytes of shared memory\n", tee->shm.size);
 	res = TEEC_AllocateSharedMemory(&tee->ctx, &tee->shm);
 	if (res != TEEC_SUCCESS)
 		errx(1, "TEEC_AllocateSharedMemory failed with code 0x%x", res);
@@ -286,11 +286,11 @@ void prime_and_probe(Tee_Data *tee) {
 
 int main(void)
 {
-	TEEC_Result res;
 	Tee_Data tee = {};
 
 	printf("Prepare program\n");
 	prepare(&tee);
+	fflush(NULL);
 
 	/**
 	 * Some base statistics, how long average cache hit/miss takes and
@@ -299,18 +299,22 @@ int main(void)
 	 */
 	printf("Time average time of cache hit and cache miss when accessing shared memory\n");
 	time_cache_access((uint8_t*)tee.shm.buffer);
+	fflush(NULL);
 	printf("\nCheck whether passing shared buffer results in it being copied\n");
 	time_nop_tee_command(&tee);
+	fflush(NULL);
 
 	/* Test cases */
 	printf("\nFlush+Reload:\n");
 	flush_and_reload(&tee);
+	fflush(NULL);
 
 	printf("\nEvict+Time:\n");
 	evict_and_time(&tee);
+	fflush(NULL);
 
-	printf("\nPrime+Probe:\n");
-	prime_and_probe(&tee);
+	// printf("\nPrime+Probe:\n");
+	// prime_and_probe(&tee);
 
 	/* End test cases */
 

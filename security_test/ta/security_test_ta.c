@@ -31,7 +31,7 @@
 #include <security_test_ta.h>
 #include <stdlib.h>
 
-int *dummy_data;
+uint32_t *dummy_data;
 
 /*
  * Called when the instance of the TA is created. This is the first call in
@@ -39,8 +39,6 @@ int *dummy_data;
  */
 TEE_Result TA_CreateEntryPoint(void)
 {
-	IMSG("TA_CreateEntryPoint: has been called");
-
 	return TEE_SUCCESS;
 }
 
@@ -50,7 +48,6 @@ TEE_Result TA_CreateEntryPoint(void)
  */
 void TA_DestroyEntryPoint(void)
 {
-	IMSG("TA_DestroyEntryPoint: has been called");
 }
 
 /*
@@ -68,8 +65,6 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 						   TEE_PARAM_TYPE_NONE,
 						   TEE_PARAM_TYPE_NONE);
 
-	IMSG("TA_OpenSessionEntryPoint: has been called");
-
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
@@ -77,7 +72,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 	(void)&params;
 	(void)&sess_ctx;
 
-	dummy_data = malloc(sizeof(int));
+	dummy_data = malloc(sizeof(uint32_t));
 
 	/* If return value != TEE_SUCCESS the session will not be created. */
 	return TEE_SUCCESS;
@@ -90,7 +85,7 @@ TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
 void TA_CloseSessionEntryPoint(void __maybe_unused *sess_ctx)
 {
 	(void)&sess_ctx; /* Unused parameter */
-	IMSG("TA_CloseSessionEntryPoint: has been called");
+	printf("Dummy data: %u\n", *dummy_data);
 }
 
 static TEE_Result read_mem(uint32_t param_types,
@@ -101,17 +96,10 @@ static TEE_Result read_mem(uint32_t param_types,
 						   TEE_PARAM_TYPE_NONE,
 						   TEE_PARAM_TYPE_NONE);
 
-	printf("read_mem: has been called\n");
-	printf("read_mem: exp_param_types: %u\n", exp_param_types);
-	printf("read_mem: param_types: %u\n", param_types);
-
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	printf("read_mem: shared memory at %p has value %d\n",
-		params[0].memref.buffer,
-		*(int*)params[0].memref.buffer
-	);
+	*dummy_data += *(uint32_t*)params[0].memref.buffer;
 
 	return TEE_SUCCESS;
 }
@@ -126,8 +114,6 @@ TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *sess_ctx,
 			uint32_t param_types, TEE_Param params[4])
 {
 	(void)&sess_ctx; /* Unused parameter */
-	printf("TA_InvokeCommandEntryPoint: has been called\n");
-	printf("TA_InvokeCommandEntryPoint: cmd_id: %u\n", cmd_id);
 
 	switch (cmd_id) {
 	case TA_SECURITY_TEST_CMD_READ_MEM:
