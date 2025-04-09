@@ -40,6 +40,7 @@
 
 #define LLC_SIZE 1024*1024
 #define SHM_SIZE 1024*512
+#define CACHE_LINE_SIZE 64
 #define TEST_REPEAT 50
 
 #define SEC_TO_NS(sec) ((sec)*1000000000)
@@ -52,13 +53,11 @@ typedef struct {
 } Tee_Data;
 
 uint64_t dummy_value;
+volatile uint8_t *flush_data;
 
 void flush_cache() {
-	static const int allocate_amount = LLC_SIZE * 10;
-	int* data = malloc(allocate_amount * sizeof(int));
-	for (int i = 0; i < allocate_amount; ++i)
-		data[i] = i;
-	free(data);
+	for (int i = 0; i < LLC_SIZE; i += CACHE_LINE_SIZE)
+		flush_data[i] = 0;
 }
 
 uint64_t nanosec(struct timespec ts) {
@@ -130,15 +129,13 @@ uint64_t time_access(volatile uint8_t *addr) {
 void time_cache_access(uint8_t *buffer) {
 	uint64_t cache_hit = 0, cache_miss = 0;
 	for (int i = 0; i < TEST_REPEAT; ++i) {
-		volatile uint8_t *data = buffer;
-		*data = i;
-		cache_hit += time_access(data);
+		*buffer = i;
+		cache_hit += time_access(buffer);
 	}
 
 	for (int i = 0; i < TEST_REPEAT; ++i) {
 		flush_cache();
-		volatile uint8_t *data = buffer;
-		cache_miss += time_access(data);
+		cache_miss += time_access(buffer);
 	}
 
 	printf("Average cache hit time: %lu\n", cache_hit / TEST_REPEAT);
@@ -164,7 +161,7 @@ void time_nop_tee_command(Tee_Data *tee) {
 }
 
 void flush_and_reload(Tee_Data *tee) {
-	uint64_t access_time = 0;
+	uint64_t access_time_accessed = 0, access_time_not_accessed = 0;
 	uint32_t err_origin;
 	TEEC_Result res;
 	for (int i = 0; i < TEST_REPEAT; ++i) {
@@ -174,10 +171,12 @@ void flush_and_reload(Tee_Data *tee) {
 		if (res != TEEC_SUCCESS)
 			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 				 res, err_origin);
-		access_time += time_access((uint8_t*)tee->shm.buffer);
+		access_time_accessed += time_access((uint8_t*)tee->shm.buffer);
+		access_time_not_accessed += time_access((uint8_t*)tee->shm.buffer + tee->shm.size - 1);
 	}
 
-	printf("Flush+Reload: Average memory access time: %lu\n", access_time / TEST_REPEAT);
+	printf("Flush+Reload: Average shared memory access time: %lu\n", access_time_accessed / TEST_REPEAT);
+	printf("Flush+Reload: Average evicted shared memory access time (should be cache miss): %lu\n", access_time_not_accessed / TEST_REPEAT);
 }
 
 void evict_and_time(Tee_Data *tee) {
@@ -205,6 +204,7 @@ void evict_and_time(Tee_Data *tee) {
 	}
 
 	printf("Evict+Time: Average program time without evicting cache: %lu\n", time_no_evict / TEST_REPEAT);
+	fflush(NULL);
 
 	for (int i = 0; i < TEST_REPEAT; ++i) {
 		flush_cache();
@@ -220,16 +220,20 @@ void evict_and_time(Tee_Data *tee) {
 		time_evict += nano_diff(ts1, ts2);
 	}
 
-	printf("Evict+Time: Average program time with evicted cache: %lu\n", time_evict / TEST_REPEAT);
+	printf("Evict+Time: Average program time with evicted cache finished ");
+	if (time_evict > time_no_evict) {
+		printf("%lu ns later\n", (time_evict - time_no_evict) / TEST_REPEAT);
+	} else {
+		printf("%lu ns quicker\n", (time_no_evict - time_evict) / TEST_REPEAT);
+	}
 }
 
 void prime_and_probe(Tee_Data *tee) {
 	uint64_t access_time = 0;
 	uint32_t err_origin;
 	TEEC_Result res;
-	uint8_t *data_in_cache = malloc(LLC_SIZE);
-	uint64_t no_access_time_per_line[LLC_SIZE / 64] = { 0 };
-	uint64_t access_time_per_line[LLC_SIZE / 64] = { 0 };
+	uint64_t no_access_time_per_line[LLC_SIZE / CACHE_LINE_SIZE] = { 0 };
+	uint64_t access_time_per_line[LLC_SIZE / CACHE_LINE_SIZE] = { 0 };
 
 	// test which lines are evicted when TA doesn't access it's own dummy
 	// memory
@@ -237,18 +241,18 @@ void prime_and_probe(Tee_Data *tee) {
 		// check each line separately as due to replacement policy we
 		// might evict our own data if we try to test whole cache in one
 		// go
-		for (size_t line = 0; line < LLC_SIZE / 64; ++line) {
+		for (size_t line = 0; line < LLC_SIZE / CACHE_LINE_SIZE; ++line) {
 			// fill cache with our data
-			for (int i = 0; i < LLC_SIZE; ++i) {
-				dummy_value += data_in_cache[i];
-			}
+			flush_cache();
 			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_DO_NOTHING,
 						&tee->op, &err_origin);
 			if (res != TEEC_SUCCESS)
 				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 					res, err_origin);
-			no_access_time_per_line[line] += time_access(data_in_cache + line * 64);
+			no_access_time_per_line[line] += time_access(flush_data + line * CACHE_LINE_SIZE);
 		}
+		printf("\rProgress %u%%", (i * 50) / TEST_REPEAT);
+		fflush(NULL);
 	}
 
 	// test which lines are evicted when TA accesses it's own dummy memory
@@ -256,22 +260,22 @@ void prime_and_probe(Tee_Data *tee) {
 		// check each line separately as due to replacement policy we
 		// might evict our own data if we try to test whole cache in one
 		// go
-		for (size_t line = 0; line < LLC_SIZE / 64; ++line) {
+		for (size_t line = 0; line < LLC_SIZE / CACHE_LINE_SIZE; ++line) {
 			// fill cache with our data
-			for (int i = 0; i < LLC_SIZE; ++i) {
-				dummy_value += data_in_cache[i];
-			}
+			flush_cache();
 			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_ACCESS_INTERNAL_MEMORY,
-						&tee->op, &err_origin);
+						 &tee->op, &err_origin);
 			if (res != TEEC_SUCCESS)
 				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 					res, err_origin);
-			access_time_per_line[line] += time_access(data_in_cache + line * 64);
+			access_time_per_line[line] += time_access(flush_data + line * CACHE_LINE_SIZE);
 		}
+		printf("\rProgress %u%%", (i * 50) / TEST_REPEAT + 50);
+		fflush(NULL);
 	}
 
-	printf("Prime+Probe: Average line access time difference\n");
-	for (size_t line; line < LLC_SIZE / 64; ++line) {
+	printf("Prime+Probe: Average cache line access time difference when TA accesses internal memory\n");
+	for (size_t line; line < LLC_SIZE / CACHE_LINE_SIZE; ++line) {
 		printf("Line %lu:\t", line);
 		if (access_time_per_line[line] > no_access_time_per_line[line]) {
 			access_time = access_time_per_line[line] - no_access_time_per_line[line];
@@ -279,15 +283,14 @@ void prime_and_probe(Tee_Data *tee) {
 			access_time = no_access_time_per_line[line] - access_time_per_line[line];
 			printf("-");
 		}
-		printf("%lu\n", access_time);
+		printf("%lu ns\n", access_time);
 	}
-
-	free(data_in_cache);
 }
 
 int main(void)
 {
 	Tee_Data tee = {};
+	flush_data = malloc(LLC_SIZE);
 
 	printf("Prepare program\n");
 	prepare(&tee);
@@ -314,8 +317,8 @@ int main(void)
 	evict_and_time(&tee);
 	fflush(NULL);
 
-	// printf("\nPrime+Probe:\n");
-	// prime_and_probe(&tee);
+	printf("\nPrime+Probe:\n");
+	prime_and_probe(&tee);
 
 	/* End test cases */
 
@@ -330,6 +333,7 @@ int main(void)
 	// Print dummy value to make sure compiler doesn't optimize out
 	// instructions without side effects
 	printf("Dummy value: %lu\n", dummy_value);
+	free((void*)flush_data);
 
 	return 0;
 }
