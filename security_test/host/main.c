@@ -189,8 +189,9 @@ void evict_and_time(Tee_Data *tee) {
 	 * Calculate how long it takes process to finish when shared memory is
 	 * in cache.
 	 */
-	dummy_value += *(uint64_t*)tee->shm.buffer;
 	for (int i = 0; i < TEST_REPEAT; ++i) {
+		flush_cache();
+		dummy_value += *(uint64_t*)tee->shm.buffer;
 		atomic_thread_fence(memory_order_acquire);
 		clock_gettime(CLOCK_MONOTONIC_RAW, &ts1);
 		res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_READ_MEM,
