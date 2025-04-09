@@ -96,9 +96,9 @@ static TEE_Result read_mem(uint32_t param_types,
 						   TEE_PARAM_TYPE_NONE,
 						   TEE_PARAM_TYPE_NONE);
 
-	IMSG("read_mem: has been called");
-	IMSG("read_mem: exp_param_types: %u", exp_param_types);
-	IMSG("read_mem: param_types: %u", param_types);
+	printf("read_mem: has been called\n");
+	printf("read_mem: exp_param_types: %u\n", exp_param_types);
+	printf("read_mem: param_types: %u\n", param_types);
 
 	if (param_types != exp_param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
@@ -116,8 +116,8 @@ TEE_Result TA_InvokeCommandEntryPoint(void __maybe_unused *sess_ctx,
 			uint32_t param_types, TEE_Param params[4])
 {
 	(void)&sess_ctx; /* Unused parameter */
-	IMSG("TA_InvokeCommandEntryPoint: has been called");
-	IMSG("TA_InvokeCommandEntryPoint: cmd_id: %u", cmd_id);
+	printf("TA_InvokeCommandEntryPoint: has been called\n");
+	printf("TA_InvokeCommandEntryPoint: cmd_id: %u\n", cmd_id);
 
 	switch (cmd_id) {
 	case TA_SECURITY_TEST_CMD_READ_MEM:

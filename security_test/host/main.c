@@ -106,7 +106,7 @@ int main(void)
 	 */
 	op.paramTypes = TEEC_PARAM_TYPES(TEEC_MEMREF_PARTIAL_INPUT, TEEC_NONE,
 					 TEEC_NONE, TEEC_NONE);
-	op.params[0].memref.parent = shm.buffer;
+	op.params[0].memref.parent = &shm;
 	op.params[0].memref.size = shm.size;
 
 	printf("Flush cache & invoke TA command\n");
