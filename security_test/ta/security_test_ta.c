@@ -29,6 +29,7 @@
 #include <tee_internal_api_extensions.h>
 
 #include <security_test_ta.h>
+#include <stdlib.h>
 
 int *dummy_data;
 

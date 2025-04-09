@@ -114,7 +114,7 @@ void prepare(Tee_Data *tee) {
 	tee->op.params[0].memref.size = tee->shm.size;
 }
 
-uint64_t time_access(uint8_t *addr) {
+uint64_t time_access(volatile uint8_t *addr) {
 	struct timespec ts1;
 	struct timespec ts2;
 	int8_t tmp;
@@ -229,7 +229,6 @@ void prime_and_probe(Tee_Data *tee) {
 	uint8_t *data_in_cache = malloc(LLC_SIZE);
 	uint64_t no_access_time_per_line[LLC_SIZE / 64] = { 0 };
 	uint64_t access_time_per_line[LLC_SIZE / 64] = { 0 };
-	uint64_t access_time;
 
 	// test which lines are evicted when TA doesn't access it's own dummy
 	// memory
@@ -272,7 +271,7 @@ void prime_and_probe(Tee_Data *tee) {
 
 	printf("Prime+Probe: Average line access time difference\n");
 	for (size_t line; line < LLC_SIZE / 64; ++line) {
-		printf("Line %u:\t", line);
+		printf("Line %lu:\t", line);
 		if (access_time_per_line[line] > no_access_time_per_line[line]) {
 			access_time = access_time_per_line[line] - no_access_time_per_line[line];
 		} else {
@@ -289,7 +288,6 @@ int main(void)
 {
 	TEEC_Result res;
 	Tee_Data tee = {};
-	uint64_t t1, t2;
 
 	printf("Prepare program\n");
 	prepare(&tee);
