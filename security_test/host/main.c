@@ -132,25 +132,36 @@ uint64_t time_access(volatile uint8_t *addr) {
 	return nano_diff(ts1, ts2);
 }
 
+int cmp_uint64(const void* a, const void* b)
+{
+    uint64_t arg1 = *(const uint64_t*)a;
+    uint64_t arg2 = *(const uint64_t*)b;
+    return (arg1 > arg2) - (arg1 < arg2);
+}
+
 void time_cache_access(uint8_t *buffer) {
-	uint64_t cache_hit = 0, cache_miss = 0;
+	uint64_t cache_hit[TEST_REPEAT] = { 0 };
+	uint64_t cache_miss[TEST_REPEAT] = { 0 };
 	for (int i = 0; i < TEST_REPEAT; ++i) {
 		*buffer = i;
-		cache_hit += time_access(buffer);
+		cache_hit[i] += time_access(buffer);
 	}
 
 	for (int i = 0; i < TEST_REPEAT; ++i) {
 		flush_cache();
-		cache_miss += time_access(buffer);
+		cache_miss[i] = time_access(buffer);
 	}
 
-	printf("Average cache hit time: %lu\n", cache_hit / TEST_REPEAT);
-	printf("Average cache miss time: %lu\n", cache_miss / TEST_REPEAT);
+	qsort(cache_hit, sizeof(cache_hit)/sizeof(*cache_hit), sizeof(*cache_hit), cmp_uint64);
+	qsort(cache_miss, sizeof(cache_miss)/sizeof(*cache_miss), sizeof(*cache_miss), cmp_uint64);
+
+	printf("Mean cache hit time: %lu\n", cache_hit[TEST_REPEAT / 2]);
+	printf("Mean cache miss time: %lu\n", cache_miss[TEST_REPEAT / 2]);
 }
 
 /* Should be cache miss, otherwise shared buffer is accessed (probably copied) */
 void time_nop_tee_command(Tee_Data *tee) {
-	uint64_t access_time = 0;
+	uint64_t access_time[TEST_REPEAT] = { 0 };
 	uint32_t err_origin;
 	TEEC_Result res;
 	for (int i = 0; i < TEST_REPEAT; ++i) {
@@ -160,14 +171,16 @@ void time_nop_tee_command(Tee_Data *tee) {
 		if (res != TEEC_SUCCESS)
 			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 				 res, err_origin);
-		access_time += time_access((uint8_t*)tee->shm.buffer);
+		access_time[i] = time_access((uint8_t*)tee->shm.buffer);
 	}
 
-	printf("Average shared memory access time: %lu\n", access_time / TEST_REPEAT);
+	qsort(access_time, sizeof(access_time)/sizeof(*access_time), sizeof(*access_time), cmp_uint64);
+	printf("Mean shared memory access time: %lu\n", access_time[TEST_REPEAT / 2]);
 }
 
 void flush_and_reload(Tee_Data *tee) {
-	uint64_t access_time_accessed = 0, access_time_not_accessed = 0;
+	uint64_t access_time_accessed[TEST_REPEAT] = { 0 };
+	uint64_t access_time_not_accessed[TEST_REPEAT] = { 0 };
 	uint32_t err_origin;
 	TEEC_Result res;
 	for (int i = 0; i < TEST_REPEAT; ++i) {
@@ -177,17 +190,23 @@ void flush_and_reload(Tee_Data *tee) {
 		if (res != TEEC_SUCCESS)
 			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 				 res, err_origin);
-		access_time_accessed += time_access((uint8_t*)tee->shm.buffer);
-		access_time_not_accessed += time_access((uint8_t*)tee->shm.buffer + tee->shm.size - 1);
+		access_time_accessed[i] = time_access((uint8_t*)tee->shm.buffer);
+		access_time_not_accessed[i] = time_access((uint8_t*)tee->shm.buffer + tee->shm.size - 1);
 	}
 
-	printf("Flush+Reload: Average shared memory access time: %lu\n", access_time_accessed / TEST_REPEAT);
-	printf("Flush+Reload: Average evicted shared memory access time (should be cache miss): %lu\n", access_time_not_accessed / TEST_REPEAT);
+	qsort(access_time_accessed, sizeof(access_time_accessed)/sizeof(*access_time_accessed),
+		sizeof(*access_time_accessed), cmp_uint64);
+	qsort(access_time_not_accessed, sizeof(access_time_not_accessed)/sizeof(*access_time_not_accessed),
+		sizeof(*access_time_not_accessed), cmp_uint64);
+
+	printf("Flush+Reload: Mean shared memory access time: %lu\n", access_time_accessed[TEST_REPEAT / 2]);
+	printf("Flush+Reload: Mean evicted shared memory access time (should be cache miss): %lu\n", access_time_not_accessed[TEST_REPEAT / 2]);
 }
 
 void evict_and_time(Tee_Data *tee) {
 	struct timespec ts1, ts2;
-	uint64_t time_no_evict = 0, time_evict = 0;
+	uint64_t time_no_evict[TEST_REPEAT] = { 0 };
+	uint64_t time_evict[TEST_REPEAT] = { 0 };
 	uint32_t err_origin;
 	TEEC_Result res;
 	/**
@@ -206,10 +225,10 @@ void evict_and_time(Tee_Data *tee) {
 		if (res != TEEC_SUCCESS)
 			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 				 res, err_origin);
-		time_no_evict += nano_diff(ts1, ts2);
+		time_no_evict[i] = nano_diff(ts1, ts2);
 	}
 
-	printf("Evict+Time: Average program time without evicting cache: %lu\n", time_no_evict / TEST_REPEAT);
+	printf("Evict+Time: Mean program time without evicting cache: %lu\n", time_no_evict[TEST_REPEAT / 2]);
 	fflush(NULL);
 
 	for (int i = 0; i < TEST_REPEAT; ++i) {
@@ -223,14 +242,14 @@ void evict_and_time(Tee_Data *tee) {
 		if (res != TEEC_SUCCESS)
 			errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 				 res, err_origin);
-		time_evict += nano_diff(ts1, ts2);
+		time_evict[i] = nano_diff(ts1, ts2);
 	}
 
-	printf("Evict+Time: Average program time with evicted cache finished ");
+	printf("Evict+Time: Mean program time with evicted cache finished ");
 	if (time_evict > time_no_evict) {
-		printf("%lu ns later\n", (time_evict - time_no_evict) / TEST_REPEAT);
+		printf("%lu ns later\n", time_evict[TEST_REPEAT / 2] - time_no_evict[TEST_REPEAT / 2]);
 	} else {
-		printf("%lu ns quicker\n", (time_no_evict - time_evict) / TEST_REPEAT);
+		printf("%lu ns quicker\n", time_no_evict[TEST_REPEAT / 2] - time_evict[TEST_REPEAT / 2]);
 	}
 }
 
