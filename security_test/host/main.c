@@ -53,11 +53,17 @@ typedef struct {
 } Tee_Data;
 
 uint64_t dummy_value;
-volatile uint8_t *flush_data;
 
 void flush_cache() {
-	for (int i = 0; i < LLC_SIZE; i += CACHE_LINE_SIZE)
-		flush_data[i] = 0;
+	volatile uint8_t* data = malloc(LLC_SIZE);
+	for (int i = 0; i < LLC_SIZE; ++i)
+		data[i] = i;
+	free((void*)data);
+}
+
+void fill_cache(volatile uint8_t *buff) {
+	for (int line = 0; line < LLC_SIZE / CACHE_LINE_SIZE; ++line)
+		buff[line*64] = (uint8_t)dummy_value;
 }
 
 uint64_t nanosec(struct timespec ts) {
@@ -234,6 +240,7 @@ void prime_and_probe(Tee_Data *tee) {
 	TEEC_Result res;
 	uint64_t no_access_time_per_line[LLC_SIZE / CACHE_LINE_SIZE] = { 0 };
 	uint64_t access_time_per_line[LLC_SIZE / CACHE_LINE_SIZE] = { 0 };
+	volatile uint8_t *private_data = malloc(LLC_SIZE);
 
 	// test which lines are evicted when TA doesn't access it's own dummy
 	// memory
@@ -243,13 +250,13 @@ void prime_and_probe(Tee_Data *tee) {
 		// go
 		for (size_t line = 0; line < LLC_SIZE / CACHE_LINE_SIZE; ++line) {
 			// fill cache with our data
-			flush_cache();
+			fill_cache(private_data);
 			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_DO_NOTHING,
 						&tee->op, &err_origin);
 			if (res != TEEC_SUCCESS)
 				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 					res, err_origin);
-			no_access_time_per_line[line] += time_access(flush_data + line * CACHE_LINE_SIZE);
+			no_access_time_per_line[line] += time_access(private_data + line * CACHE_LINE_SIZE);
 		}
 		printf("\rProgress %u%%", (i * 50) / TEST_REPEAT);
 		fflush(NULL);
@@ -262,13 +269,13 @@ void prime_and_probe(Tee_Data *tee) {
 		// go
 		for (size_t line = 0; line < LLC_SIZE / CACHE_LINE_SIZE; ++line) {
 			// fill cache with our data
-			flush_cache();
+			fill_cache(private_data);
 			res = TEEC_InvokeCommand(&tee->sess, TA_SECURITY_TEST_CMD_ACCESS_INTERNAL_MEMORY,
 						 &tee->op, &err_origin);
 			if (res != TEEC_SUCCESS)
 				errx(1, "TEEC_InvokeCommand failed with code 0x%x origin 0x%x",
 					res, err_origin);
-			access_time_per_line[line] += time_access(flush_data + line * CACHE_LINE_SIZE);
+			access_time_per_line[line] += time_access(private_data + line * CACHE_LINE_SIZE);
 		}
 		printf("\rProgress %u%%", (i * 50) / TEST_REPEAT + 50);
 		fflush(NULL);
@@ -285,12 +292,13 @@ void prime_and_probe(Tee_Data *tee) {
 		}
 		printf("%lu ns\n", access_time);
 	}
+
+	free(private_data);
 }
 
 int main(void)
 {
 	Tee_Data tee = {};
-	flush_data = malloc(LLC_SIZE);
 
 	printf("Prepare program\n");
 	prepare(&tee);
@@ -317,8 +325,9 @@ int main(void)
 	evict_and_time(&tee);
 	fflush(NULL);
 
-	printf("\nPrime+Probe:\n");
-	prime_and_probe(&tee);
+	/* Too slow (mostly flushing) */
+	// printf("\nPrime+Probe:\n");
+	// prime_and_probe(&tee);
 
 	/* End test cases */
 
@@ -333,7 +342,6 @@ int main(void)
 	// Print dummy value to make sure compiler doesn't optimize out
 	// instructions without side effects
 	printf("Dummy value: %lu\n", dummy_value);
-	free((void*)flush_data);
 
 	return 0;
 }
