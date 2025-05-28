@@ -11,7 +11,6 @@ struct vm_config linux = {
         .size = VM_IMAGE_SIZE(linux_image),
     },
     .entry = 0x20200000,
-    .colors = 0x1,
 
     .type = 0,
 
@@ -21,7 +20,9 @@ struct vm_config linux = {
         .regions =  (struct mem_region[]) {
             {
                 .base = 0x20000000,
-                .size = 0x38000000,
+                .size = 0x30000000,
+                .place_phys = true,
+                .phys = 0x10000000
             }
         },
         .dev_num = 4,
@@ -73,7 +74,6 @@ struct vm_config linux2 = {
         .size = VM_IMAGE_SIZE(linux_image2),
     },
     .entry = 0x20200000,
-    .colors = 0x2,
 
     .type = 0,
 
@@ -83,7 +83,9 @@ struct vm_config linux2 = {
         .regions =  (struct mem_region[]) {
             {
                 .base = 0x20000000,
-                .size = 0x38000000,
+                .size = 0x30000000,
+                .place_phys = true,
+                .phys = 0x40000000
             }
         },
         .dev_num = 4,
@@ -123,10 +125,6 @@ struct vm_config linux2 = {
 
 struct config config = {
     CONFIG_HEADER
-    .shmemlist_size = 1,
-    .shmemlist = (struct shmem[]) {
-        [0] = {.size = 0x00200000,},
-    },
     .vmlist_size = 2,
     .vmlist = {
         &linux,
