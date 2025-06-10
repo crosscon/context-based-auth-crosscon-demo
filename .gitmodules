@@ -16,3 +16,6 @@
 [submodule "optee_test"]
 	path = optee_test
 	url = https://github.com/crosscon/optee_test.git
+[submodule "cba_ta"]
+	path = cba_ta
+	url = git@github.com:crosscon/context-based-auth-trusted-application.git
