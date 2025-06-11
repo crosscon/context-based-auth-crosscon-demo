@@ -5,6 +5,9 @@
 The purpose of this repo is to provide the environment required for
 compilation of the CROSSCON hypervisor.
 
+This README and the `build_rpi4.sh` script are modified to demonstrate the
+specific build process for building the CBA TA.
+
 ## Clone the repository
 
 Clone the repository by executing following command.
@@ -38,13 +41,16 @@ Inside the container, use below script to build the demo `rpi4-ws` package.
 env/build_rpi4.sh --all
 ```
 
-The script steps follow exactly what can be found in
-[the README](../rpi4-ws/README.md) on how to build the demo. This command will
-perform all steps. Run the command without any parameters to see other options.
+The script steps are based on what can be found in
+[the README](../rpi4-ws/README.md). It is the modified version and to build the CBA TA
+and leave out the other TAs irrelevant for this demo.
+The above command will perform all necessary steps to build the demo.
+Run it without any parameters to see other options:
 
 ```bash
 env/build_rpi4.sh
 ```
+
 
 ## Creating and flashing the image
 
@@ -63,6 +69,7 @@ The built image can be then flashed to SD card.
 ```bash
 sudo dd if=./crosscon-demo-img.img of=<drive> bs=4M conv=fsync
 ```
+
 
 ## Running the image
 
@@ -92,8 +99,8 @@ Boot the image by manually loading it into the memory and "jumping" to it.
 fatload mmc 0 0x200000 crossconhyp.bin; go 0x200000
 ```
 
-## QEMU build
+## ~QEMU build~
 
-The docker image contains all the neccessary dependencies to build the QEMU
-images as well (RISCV included), so all that needs to be done is following
-the instructions from [the readme](../README.md).
+~The docker image contains all the neccessary dependencies to build the QEMU~
+~images as well (RISCV included), so all that needs to be done is following~
+~the instructions from [the readme](../README.md).~
