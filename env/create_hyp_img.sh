@@ -60,7 +60,7 @@ sudo -u "$SUDO_USER" env PATH=$C_PATH make -C CROSSCON-Hypervisor/ \
     PLATFORM=rpi4 \
     CONFIG_BUILTIN=y \
     CONFIG_REPO=$CONFIG_REPO \
-    CONFIG=rpi4-single-vTEE \
+    CONFIG=rpi4-single-vTEE-dual-linux \
     OPTIMIZATIONS=0 \
     SDEES='sdSGX sdTZ' \
     CROSS_COMPILE=aarch64-none-elf- \
@@ -72,7 +72,7 @@ sudo -u "$SUDO_USER" env PATH=$C_PATH make -C CROSSCON-Hypervisor/ \
     PLATFORM=rpi4 \
     CONFIG_BUILTIN=y \
     CONFIG_REPO=$CONFIG_REPO \
-    CONFIG=rpi4-single-vTEE \
+    CONFIG=rpi4-single-vTEE-dual-linux \
     OPTIMIZATIONS=0 \
     SDEES="sdSGX sdTZ" \
     CROSS_COMPILE=aarch64-none-elf- \
@@ -85,7 +85,7 @@ cp -v rpi4-ws/bin/bl31.bin $MOUNT_DIR
 cp -v rpi4-ws/bin/u-boot.bin $MOUNT_DIR
 cp -v lloader/linux-rpi4.bin $MOUNT_DIR
 cp -vr rpi4-ws/firmware/boot/start* $MOUNT_DIR
-cp -uv CROSSCON-Hypervisor/bin/rpi4/builtin-configs/rpi4-single-vTEE/crossconhyp.bin $MOUNT_DIR
+cp -uv CROSSCON-Hypervisor/bin/rpi4/builtin-configs/rpi4-single-vTEE-dual-linux/crossconhyp.bin $MOUNT_DIR
 
 echo "# Unmounting the image"
 umount $MOUNT_DIR

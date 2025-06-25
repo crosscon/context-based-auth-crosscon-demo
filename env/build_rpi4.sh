@@ -330,14 +330,14 @@ step_7() {
 step_8() {
     cd "$ROOT"
 
-    dtc -I dts -O dtb rpi4-ws/rpi4.dts >rpi4-ws/rpi4.dtb
+    dtc -I dts -O dtb rpi4-ws/rpi4-host-linux.dts >rpi4-ws/rpi4-host-linux.dtb
     cd lloader
 
     rm -f linux-rpi4.bin
     rm -f linux-rpi4.elf
     make \
         IMAGE=../linux/build-aarch64/arch/arm64/boot/Image \
-        DTB=../rpi4-ws/rpi4.dtb \
+        DTB=../rpi4-ws/rpi4-host-linux.dtb \
         TARGET=linux-rpi4.bin \
         CROSS_COMPILE=aarch64-none-elf- \
         ARCH=aarch64
