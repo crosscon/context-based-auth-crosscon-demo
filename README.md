@@ -4,9 +4,11 @@
 
 This repository demonstrates how to build & use the Context-based Authentication (CBA) Trusted Service on the CROSSCON Hypervisor. It is based on the [*Hypervisor and TEE Isolation Demos* (forked by 3mdeb)](https://github.com/3mdeb/CROSSCON-Hypervisor-and-TEE-Isolation-Demos) repo published for the overall CROSSCON HV stack, and adapted to build the trusted application along the required modified OP-TEE OS.
 
-**Note:** This is only one part to fully run CBA as it requires another separate VM containing a modified WiFi driver (*Nexmon VM*) to be present on the system in order to fully work. Instructions for how to build this other separate VM can be found [here](https://github.com/crosscon/context-based-auth-nexmon-vm). **At the moment, no default configuration exists for having those VMs run side by side!** One will be added to this repository as soon as possible.
+**Note:** This is only one part to fully run CBA as it requires another separate VM containing a modified WiFi driver (*Nexmon VM*) to be present on the system in order to fully work. Instructions for how to build this other separate VM can be found [here](https://github.com/crosscon/context-based-auth-nexmon-vm). The Linux binary created via from the other repo must be copied to `nexmon` (see `nexmon/README.md` for the exact name & location). The hypervisor configuration for running the three VMs (OP-TEE + dual Linux) can be found in `rpi4-ws/configs/rpi4-single-vTEE-dual-linux`. It is used by the build scripts (see below).
 
 This service is only available on the Raspberry Pi 4, so all links to any other device (and especially the RISC-V architecture) are irrelevant for this demo.
+
+**Note:** The configuration file provided contains a shared memory region that is added to all three VMs. This is done for testing the individual components *only* because it provides access to the collected data to the host Linux and allows it to bypass OP-TEE. **It should be removed in production settings!**
 
 
 ## Requirements
@@ -46,7 +48,7 @@ Instructions for building the image and flashing it onto an SD card using the Do
 
 ## Testing
 
-**Note:** Testing here refers to testing the TA *without the Nexmon VM*! It is mainly meant to confirm the configuration and to verify that the build system works. Since no Nexmon VM is present, the expected behavior regarding the communication via shared memory must be simulated using a series of `busybox devmem` commands.
+**Note:** Testing here refers to testing the TA *without the Nexmon VM*! It is mainly meant to confirm the configuration and to verify that the build system works. Since no Nexmon VM is present, the expected behavior regarding the communication via shared memory must be simulated using a series of `busybox devmem` commands. After adding the Nexmon VM, the commands work without manually writing the shared memory.
 
 The following commands expect the shared memory area to be configured starting at address `0x9000000`. The hypervisor configuration provided in this repository has that value by default.
 
