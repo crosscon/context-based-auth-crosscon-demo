@@ -1,4 +1,4 @@
-# CROSSCON Hypervisor and TEE Isolation
+# Context-based Authentication Demo on CROSSCON Stack
 
 ## Overview
 
