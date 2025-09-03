@@ -40,7 +40,7 @@ Before building the components, some configuration is required. In all files, th
 | | `TA_CONTEXT_BASED_AUTHENTICATION_BANDWIDTH` | WiFi channel bandwidth (leave at 20 MHz for the provided machine learning model) |
 | | `TA_CONTEXT_BASED_AUTHENTICATION_RECORDING_TIMEOUT` | CSI recording timeout |
 | | `TA_CONTEXT_BASED_AUTHENTICATION_SAMPLES_PER_DEVICE` | CSI samples per device (leave at 64 for the provided machine learning model) |
-| `cba_ta/host/main.c` | `SERVER_TEST_SIGNATURE` | Sample signature created by the remote server to demonstrate verification (see its configuration for more info) |
+| `cba_ta/host/main.c` | `SERVER_TEST_SIGNATURE` | Sample signature created by the remote server to demonstrate verification (see [here](https://github.com/crosscon/context-based-auth-remote/tree/with-ml-next) for how to use the `demo_signature.py` script) |
 | `optee_os/core/pta/csi.c` | `CSI_PHYSICAL_ADDR_START` | base address for shared memory between OP-TEE and Nexmon VM (only change if required) |
 | | `CSI_PHYSICAL_ADDR_SIZE` | size of shared memory between OP-TEE and Nexmon VM (only change if required) |
 
